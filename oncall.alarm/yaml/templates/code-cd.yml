@@ -1,0 +1,39 @@
+parameters: 
+- name: hclServiceConnection
+  type: string
+  default: ''
+- name: cspServiceConnection
+  type: string
+  default: ''
+
+steps:
+
+- task: ArchiveFiles@2
+  displayName: 'Zip code'
+  inputs:
+    rootFolderOrFile: '$(System.DefaultWorkingDirectory)/$(files.path)'
+    includeRootFolder: false
+    archiveType: 'zip'
+    archiveFile: '$(Build.ArtifactStagingDirectory)/lambda.zip'
+    replaceExistingArchive: true
+
+- task: S3Upload@1
+  displayName: 'Upload Code to S3'
+  inputs:
+    awsCredentials: ${{ parameters.cspServiceConnection }}
+    regionName: 'us-east-1'
+    bucketName: 'wdrx-sandbox-deployments'
+    sourceFolder: '$(Build.ArtifactStagingDirectory)'
+    globExpressions: 'lambda.zip'
+    targetFolder: '$(environment)/$(app_name)/code'
+    keyManagement: 'awsManaged'
+    encryptionAlgorithm: 'AES256'
+  
+- task: AWSCLI@1
+  displayName: 'Update lambda code'
+  inputs:
+    awsCredentials: ${{ parameters.cspServiceConnection }}
+    regionName: 'us-east-1'
+    awsCommand: 'lambda'
+    awsSubCommand: 'update-function-code'
+    awsArguments: '--function-name "$(environment)-$(app_name)-lambda" --s3-bucket $(bucket) --s3-key $(environment)/$(app_name)/code/lambda.zip'
